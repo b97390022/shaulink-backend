@@ -1,0 +1,109 @@
+version: '3.9'
+
+services:
+  redis:
+    image: 'bitnami/redis:7.0'
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes: 
+      - redis-data:/data
+    networks:
+      - backend-tier
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 5s
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        failure_action: pause
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+  # frontend:
+  #   image: shau1943/shaulink-frontend:1.0.0
+  #   networks:
+  #     - frontend-tier
+  #   ports:
+  #     - '80:80'
+  #   depends_on:
+  #     - backend
+  #   deploy:
+  #     mode: replicated
+  #     replicas: 1
+  #     placement:
+  #       constraints:
+  #         - node.role == manager
+  #     update_config:
+  #       parallelism: 1
+  #       delay: 5s
+  #       failure_action: rollback
+  #     rollback_config:
+  #       parallelism: 1
+  #       delay: 5s
+  #       failure_action: pause
+  #     restart_policy:
+  #       condition: on-failure
+  #       delay: 5s
+  #       max_attempts: 3
+  #       window: 120s
+
+  backend:
+    image: shau1943/shaulink-backend:1.0.0
+    volumes:
+      - ./src:/shaulink-backend/src
+      - ./config.json:/shaulink-backend/config.json
+    depends_on: 
+      - redis
+    ports:
+      - "8000:8000"
+    networks:
+      - frontend-tier
+      - backend-tier
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      update_config:
+        parallelism: 1
+        delay: 5s
+        failure_action: rollback
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+        failure_action: pause
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+        
+volumes: 
+  redis-data:
+
+networks:
+  frontend-tier:
+    attachable: true
+  backend-tier:
+    attachable: true
