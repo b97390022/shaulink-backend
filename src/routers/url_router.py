@@ -1,40 +1,39 @@
-from fastapi import APIRouter, Depends, HTTPException
-from src.db import RedisClient
-from redis.asyncio.client import Redis
+from fastapi import APIRouter, Depends, HTTPException, Header
+from src.db import RedisClient, DBClient
+from sqlalchemy.ext.asyncio import AsyncEngine
 import src.functions as functions
 import src.models as models
+import src.crud as crud
 from src.config import base_config
+from src.functions import get_logger
+from src.routers.base_router import get_og_info
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 redis_client = RedisClient()
+db_client = DBClient()
 
-@router.get('/{url}')
-async def get_long_url(
-    url: str,
-    redis_connection: Redis = Depends(redis_client.get_connection)
-):
-    if await redis_connection.exists(url):
-        long_url = await redis_connection.get(url)
-        return {
-            "long_url": long_url,
-        }
-    else:
-        raise HTTPException(status_code=404, detail="Short URL not found!")
-    
-@router.post("/shorten/")
+@router.post("/shorten")
 async def shorten_url(
     url_item: models.UrlItem,
-    redis_connection: Redis = Depends(redis_client.get_connection)
+    async_engine: AsyncEngine = Depends(db_client.get_async_engine)
 ):
     long_url = str(url_item.url)
-    
-    if await redis_connection.exists(long_url):
-        return await redis_connection.get(long_url)
+    og_info = await get_og_info(long_url)
 
-    random_hash = functions.generate_base64_random_hash()
-
-    while await redis_connection.exists(random_hash):
-        random_hash = functions.generate_base64_random_hash()
-
-    await redis_connection.set(random_hash, long_url, ex=base_config.url_ttl)
-    return f"https://{base_config.domain}/{random_hash}"
+    id_ = await crud.insert_objects({
+        "type": 1,
+        "password": "",
+        "og_title": og_info.get("title", ""),
+        "og_url": og_info.get("url", ""),
+        "og_image": og_info.get("image", ""),
+        "og_description": og_info.get("description", ""),
+        "long_url": long_url,
+    }, await db_client.get_async_session(async_engine))
+   
+    return {
+        "data":{
+            "shortUrl": f"{'https' if base_config.domain != 'localhost' else 'http'}://{base_config.domain}/{id_}",
+        }
+    }

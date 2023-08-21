@@ -1,4 +1,6 @@
 *
 !src
+!temp
 !nginx.conf
-!requirements.txt
+!poetry.lock
+!pyproject.toml

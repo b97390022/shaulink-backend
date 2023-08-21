@@ -2,7 +2,7 @@ version: '3.9'
 
 services:
   redis:
-    image: 'bitnami/redis:7.0'
+    image: 'redis:7.0.12'
     environment:
       - ALLOW_EMPTY_PASSWORD=yes
     volumes: 
@@ -20,14 +20,6 @@ services:
       placement:
         constraints:
           - node.role == manager
-      update_config:
-        parallelism: 1
-        delay: 5s
-        failure_action: rollback
-      rollback_config:
-        parallelism: 1
-        delay: 5s
-        failure_action: pause
       restart_policy:
         condition: on-failure
         delay: 5s
@@ -63,9 +55,13 @@ services:
   #       window: 120s
 
   backend:
+    build:
+      context: .
     image: shau1943/shaulink-backend:1.0.0
     volumes:
+      - ./shaulink.db:/shaulink-backend/shaulink.db
       - ./src:/shaulink-backend/src
+      - ./temp:/shaulink-backend/temp
       - ./config.json:/shaulink-backend/config.json
     depends_on: 
       - redis
